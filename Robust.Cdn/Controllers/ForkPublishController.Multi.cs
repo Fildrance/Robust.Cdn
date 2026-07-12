@@ -45,30 +45,31 @@ public sealed partial class ForkPublishController
             publishManager.AbortMultiPublish(fork, request.Version, tx, commit: false);
         }
 
-        await dbCon.ExecuteAsync("""
+        await dbCon.ExecuteAsync(
+            """
             INSERT INTO PublishInProgress (
                 Version, 
                 ForkId, 
                 StartTime, 
                 EngineVersion,
-                ForkUrl,
-                CommitId,
-                BranchName,
-                RobustToolboxUrl,
-                RobustToolboxCommitId
-                RobustToolboxBranchName
+                SourceUrl,
+                SourceCommitId,
+                SourceBranchName,
+                EngineSourceUrl,
+                EngineSourceCommitId,
+                EngineSourceBranchName 
             )
             VALUES (
                 @Version, 
                 @ForkId, 
                 @StartTime, 
                 @EngineVersion,
-                @ForkUrl,
-                @CommitId,
-                @BranchName,
-                @RobustToolboxUrl,
-                @RobustToolboxCommitId
-                @RobustToolboxBranchName
+                @SourceUrl,
+                @SourceCommitId,
+                @SourceBranchName,
+                @EngineSourceUrl,
+                @EngineSourceCommitId,
+                @EngineSourceBranchName 
             )
             """,
             new
@@ -77,12 +78,12 @@ public sealed partial class ForkPublishController
                 request.EngineVersion,
                 ForkId = forkId,
                 StartTime = DateTime.UtcNow,
-                request.ForkUrl,
-                request.CommitId,
-                request.BranchName,
-                RobustToolboxUrl = request.EngineUrl,
-                RobustToolboxCommitId = request.EngineCommitId,
-                RobustToolboxBranchName = request.EngineBranchName,
+                request.SourceUrl,
+                request.SourceCommitId,
+                request.SourceBranchName,
+                request.EngineSourceUrl,
+                request.EngineSourceCommitId,
+                request.EngineSourceBranchName,
             });
 
         var versionDir = buildDirectoryManager.GetBuildVersionPath(fork, request.Version);
@@ -157,7 +158,7 @@ public sealed partial class ForkPublishController
         var forkId = dbCon.QuerySingle<int>("SELECT Id FROM Fork WHERE Name = @Name", new { Name = fork });
         var versionMetadata = dbCon.QuerySingleOrDefault<VersionMetadata>(
             """
-            SELECT Version, EngineVersion, ForkUrl, CommitId, BranchName, EngineUrl, EngineCommitId, EngineBranchName
+            SELECT Version, EngineVersion, SourceUrl, SourceCommitId, SourceBranchName, EngineSourceUrl, EngineSourceCommitId, EngineSourceBranchName 
             FROM PublishInProgress
             WHERE Version = @Name AND ForkId = @Fork
             """,

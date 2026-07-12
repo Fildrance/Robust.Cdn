@@ -314,32 +314,32 @@ public sealed partial class ForkPublishController(
         /// <summary>
         /// URL of the fork repository. Optional, but useful for debugging.
         /// </summary>
-        public string? ForkUrl { get; set; }
-
-        /// <summary>
-        /// Branch on which version was built. Optional, but useful for debugging.
-        /// </summary>
-        public string? BranchName { get; set; }
+        public string? SourceUrl { get; set; }
 
         /// <summary>
         /// Commit ID on which version was built. Optional, but useful for debugging.
         /// </summary>
-        public string? CommitId { get; set; }
+        public string? SourceCommitId { get; set; }
+
+        /// <summary>
+        /// Branch on which version was built. Optional, but useful for debugging.
+        /// </summary>
+        public string? SourceBranchName { get; set; }
 
         /// <summary>
         /// Url for RobustToolbox repository (or its fork), used for this version. Optional, but useful for debugging.
         /// </summary>
-        public string? EngineUrl { get; set; }
-
-        /// <summary>
-        /// Commit ID of RobustToolbox, used for this version. Optional, but useful for debugging.
-        /// </summary>
-        public string? EngineCommitId { get; set; }
+        public string? EngineSourceUrl { get; set; }
 
         /// <summary>
         /// Branch on which RobustToolbox for this version was built. Optional, but useful for debugging.
         /// </summary>
-        public string? EngineBranchName { get; set; }
+        public string? EngineSourceBranchName { get; set; }
+
+        /// <summary>
+        /// Commit ID of RobustToolbox, used for this version. Optional, but useful for debugging.
+        /// </summary>
+        public string? EngineSourceCommitId { get; set; }
     }
 
     /// <summary>
@@ -370,18 +370,18 @@ public sealed partial class ForkPublishController(
         public VersionMetadata(
             string version,
             string engineVersion,
-            string sourceUrl,
-            string sourceCommitId,
-            string sourceBranch,
-            string engineSourceUrl,
-            string engineSourceCommitId,
-            string engineSourceBranch
+            string? sourceUrl,
+            string? sourceCommitId,
+            string? sourceBranchName,
+            string? engineSourceUrl,
+            string? engineSourceCommitId,
+            string? engineSourceBranchName
         )
         {
             Version = version;
             EngineVersion = engineVersion;
-            BuildVersionInfo = new SourceVersionInfo(sourceUrl, sourceCommitId, sourceBranch);
-            EngineSourceVersionInfo = new SourceVersionInfo(engineSourceUrl, engineSourceCommitId, engineSourceBranch);
+            BuildVersionInfo = new SourceVersionInfo(sourceUrl, sourceCommitId, sourceBranchName);
+            EngineSourceVersionInfo = new SourceVersionInfo(engineSourceUrl, engineSourceCommitId, engineSourceBranchName);
         }
 
         /// <summary>

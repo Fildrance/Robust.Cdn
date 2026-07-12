@@ -54,8 +54,8 @@ public sealed partial class ForkPublishController
         var metadata = new VersionMetadata(
             request.Version,
             request.EngineVersion,
-            new(request.ForkUrl, request.CommitId, request.BranchName),
-            new(request.EngineUrl, request.EngineBranchName, request.EngineCommitId)
+            new(request.SourceUrl, request.SourceCommitId, request.SourceBranchName),
+            new(request.EngineSourceUrl, request.EngineSourceCommitId, request.EngineSourceBranchName)
         );
 
         try
