@@ -142,12 +142,12 @@ public sealed partial class ForkPublishController(
             { "manifest_url", baseUrlManager.MakeBuildInfoUrl("fork/{FORK_ID}/version/{FORK_VERSION}/manifest") },
             { "manifest_download_url", baseUrlManager.MakeBuildInfoUrl("fork/{FORK_ID}/version/{FORK_VERSION}/download") },
             { "manifest_hash", manifestHash },
-            { "fork_url", metadata.BuildVersionInfo.SourceUrl },
+            { "built_on_source_url", metadata.BuildVersionInfo.SourceUrl },
             { "built_on_commit_id", metadata.BuildVersionInfo.CommitId },
             { "built_on_branch_name", metadata.BuildVersionInfo.BranchName},
-            { "engine_url", metadata.EngineSourceVersionInfo.SourceUrl },
-            { "engine_built_on_commit_id", metadata.EngineSourceVersionInfo.CommitId },
-            { "engine_built_on_branch_name", metadata.EngineSourceVersionInfo.BranchName },
+            { "built_on_engine_url", metadata.EngineSourceVersionInfo.SourceUrl },
+            { "built_on_engine_commit_id", metadata.EngineSourceVersionInfo.CommitId },
+            { "built_on_engine_branch_name", metadata.EngineSourceVersionInfo.BranchName },
         };
 
         var stream = new MemoryStream();
