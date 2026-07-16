@@ -1,7 +1,8 @@
-﻿using Dapper;
+using Dapper;
 using Microsoft.Extensions.Options;
 using Quartz;
 using Robust.Cdn.Config;
+using Robust.Cdn.DataAccessLayer;
 
 namespace Robust.Cdn.Jobs;
 

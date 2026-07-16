@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Collections;
 using System.Diagnostics;
 using Dapper;
@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Robust.Cdn.Config;
+using Robust.Cdn.DataAccessLayer;
 using Robust.Cdn.Helpers;
 using Robust.Cdn.Lib;
 using Robust.Cdn.Services;

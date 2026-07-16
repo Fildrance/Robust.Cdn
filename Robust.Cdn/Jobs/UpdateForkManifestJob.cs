@@ -1,7 +1,8 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dapper;
 using Quartz;
+using Robust.Cdn.DataAccessLayer;
 using Robust.Cdn.Helpers;
 
 namespace Robust.Cdn.Jobs;

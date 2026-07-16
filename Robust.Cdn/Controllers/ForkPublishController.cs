@@ -7,6 +7,7 @@ using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using Quartz;
 using Robust.Cdn.Config;
+using Robust.Cdn.DataAccessLayer;
 using Robust.Cdn.Helpers;
 using Robust.Cdn.Jobs;
 using Robust.Cdn.Services;

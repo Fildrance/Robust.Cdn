@@ -3,7 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using Robust.Cdn.Config;
 
-namespace Robust.Cdn;
+namespace Robust.Cdn.DataAccessLayer;
 
 public abstract class BaseScopedDatabase : IDisposable
 {

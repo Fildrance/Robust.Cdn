@@ -5,6 +5,7 @@ using Quartz;
 using Robust.Cdn;
 using Robust.Cdn.Config;
 using Robust.Cdn.Controllers;
+using Robust.Cdn.DataAccessLayer;
 using Robust.Cdn.Helpers;
 using Robust.Cdn.Jobs;
 using Robust.Cdn.Services;
