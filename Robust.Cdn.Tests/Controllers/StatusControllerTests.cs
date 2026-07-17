@@ -9,6 +9,7 @@ namespace Robust.Cdn.Tests.Controllers;
 ///
 /// Endpoint: GET /control/status
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class StatusControllerTests(WebApplicationFactory<Program> factory, DatabaseFixture database)
     : TestBase(factory, database)
 {
