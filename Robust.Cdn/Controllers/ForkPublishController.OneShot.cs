@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
+using Robust.Cdn.DataAccessLayer.Models;
 using Robust.Cdn.Helpers;
 
 namespace Robust.Cdn.Controllers;
@@ -25,7 +26,7 @@ public sealed partial class ForkPublishController
         if (!ValidVersionRegex.IsMatch(request.Version))
             return BadRequest("Invalid version name");
 
-        if (VersionAlreadyExists(fork, request.Version))
+        if (manifestDatabase.IsVersionExists(fork, request.Version))
             return Conflict("Version already exists");
 
         logger.LogInformation("Starting one-shot publish for fork {Fork} version {Version}", fork, request.Version);
@@ -66,15 +67,11 @@ public sealed partial class ForkPublishController
             var buildJson = GenerateBuildJson(diskFiles, clientArtifact.Value.artifact, metadata, fork);
             InjectBuildJsonIntoServers(diskFiles, buildJson);
 
-            using var tx = manifestDatabase.Connection.BeginTransaction();
+            logger.LogDebug("Adding new version to database");
 
-            AddVersionToDatabase(
-                clientArtifact.Value.artifact,
-                diskFiles,
-                fork,
-                metadata);
-
-            tx.Commit();
+            manifestDatabase.StartTransaction();
+            manifestDatabase.AddVersionsToDatabase(clientArtifact.Value.artifact, diskFiles, fork, metadata);
+            manifestDatabase.Commit();
 
             await QueueIngestJobAsync(fork);
 
@@ -91,13 +88,13 @@ public sealed partial class ForkPublishController
         }
     }
 
-    private Dictionary<Artifact, string> ExtractZipToVersionDir(
-        List<(ZipArchiveEntry entry, Artifact artifact)> artifacts,
+    private Dictionary<ArtifactBriefInfo, string> ExtractZipToVersionDir(
+        List<(ZipArchiveEntry entry, ArtifactBriefInfo artifact)> artifacts,
         string versionDir)
     {
         logger.LogDebug("Extracting artifacts to directory {Directory}", versionDir);
 
-        var dict = new Dictionary<Artifact, string>();
+        var dict = new Dictionary<ArtifactBriefInfo, string>();
 
         foreach (var (entry, artifact) in artifacts)
         {

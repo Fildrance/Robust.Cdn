@@ -1,8 +1,6 @@
 using System.Text.Json;
-using Dapper;
 using Quartz;
 using Robust.Cdn.DataAccessLayer;
-using Robust.Cdn.Helpers;
 
 namespace Robust.Cdn.Jobs;
 
@@ -37,15 +35,11 @@ public sealed class MakeNewManifestVersionsAvailableJob(
             fork,
             versions.Length);
 
-        using var tx = database.Connection.BeginTransaction();
+        database.StartTransaction();
+        database.SetForkVersionsAvailable(fork, versions);
+        database.Commit();
 
-        var forkId = database.Connection.QuerySingle<int>(
-            "SELECT Id FROM Fork WHERE Name = @ForkName",
-            new { ForkName = fork });
-
-        MakeVersionsAvailable(forkId, versions);
-
-        tx.Commit();
+        logger.LogInformation("New available versions: {Version}", string.Join(" , ", versions));
 
         var scheduler = await factory.GetScheduler();
         await scheduler.TriggerJob(
@@ -53,23 +47,4 @@ public sealed class MakeNewManifestVersionsAvailableJob(
             UpdateForkManifestJob.Data(fork, notifyUpdate: true));
     }
 
-    private void MakeVersionsAvailable(int forkId, IEnumerable<string> versions)
-    {
-        foreach (var version in versions)
-        {
-            logger.LogInformation("New available version: {Version}", version);
-
-            database.Connection.Execute("""
-                UPDATE ForkVersion
-                SET Available = TRUE
-                WHERE Name = @Name
-                  AND ForkId = @ForkId
-                """,
-                new
-                {
-                    Name = version,
-                    ForkId = forkId
-                });
-        }
-    }
 }

@@ -3,11 +3,11 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using Quartz;
 using Robust.Cdn.Config;
 using Robust.Cdn.DataAccessLayer;
+using Robust.Cdn.DataAccessLayer.Models;
 using Robust.Cdn.Helpers;
 using Robust.Cdn.Jobs;
 using Robust.Cdn.Services;
@@ -51,28 +51,12 @@ public sealed partial class ForkPublishController(
 
     public const string PublishFetchHttpClient = "PublishFetch";
 
-    private bool VersionAlreadyExists(string fork, string version)
-    {
-        return manifestDatabase.Connection.QuerySingleOrDefault<bool>(
-            """
-            SELECT 1
-            FROM Fork, ForkVersion
-            WHERE Fork.Id = ForkVersion.ForkId
-              AND Fork.Name = @ForkName
-              AND ForkVersion.Name = @ForkVersion
-            """, new
-            {
-                ForkName = fork,
-                ForkVersion = version
-            });
-    }
-
-    private List<(T key, Artifact artifact)> ClassifyEntries<T>(
+    private List<(T key, ArtifactBriefInfo artifact)> ClassifyEntries<T>(
         ManifestForkOptions forkConfig,
         IEnumerable<T> items,
         Func<T, string> getName)
     {
-        var list = new List<(T, Artifact)>();
+        var list = new List<(T, ArtifactBriefInfo)>();
 
         foreach (var item in items)
         {
@@ -94,15 +78,15 @@ public sealed partial class ForkPublishController(
         return list;
     }
 
-    private static Artifact? ClassifyEntry(ManifestForkOptions forkConfig, string name)
+    private static ArtifactBriefInfo? ClassifyEntry(ManifestForkOptions forkConfig, string name)
     {
         if (name == $"{forkConfig.ClientZipName}.zip")
-            return new Artifact { Type = ArtifactType.Client };
+            return new ArtifactBriefInfo { Type = ArtifactType.Client };
 
         if (name.StartsWith(forkConfig.ServerZipName) && name.EndsWith(".zip"))
         {
             var rid = name[forkConfig.ServerZipName.Length..^".zip".Length];
-            return new Artifact
+            return new ArtifactBriefInfo
             {
                 Platform = rid,
                 Type = ArtifactType.Server
@@ -113,14 +97,14 @@ public sealed partial class ForkPublishController(
     }
 
     private MemoryStream GenerateBuildJson(
-        Dictionary<Artifact, string> diskFiles,
-        Artifact clientArtifact,
+        Dictionary<ArtifactBriefInfo, string> diskFiles,
+        ArtifactBriefInfo clientArtifactBriefInfo,
         VersionMetadata metadata,
         string forkName)
     {
         logger.LogDebug("Generating build.json contents");
 
-        var diskPath = diskFiles[clientArtifact];
+        var diskPath = diskFiles[clientArtifactBriefInfo];
 
         var diskFileName = Path.GetFileName(diskPath);
         using var file = System.IO.File.OpenRead(diskPath);
@@ -192,7 +176,7 @@ public sealed partial class ForkPublishController(
         return HashHelper.HashBlake2B(stream);
     }
 
-    private void InjectBuildJsonIntoServers(Dictionary<Artifact, string> diskFiles, MemoryStream buildJson)
+    private void InjectBuildJsonIntoServers(Dictionary<ArtifactBriefInfo, string> diskFiles, MemoryStream buildJson)
     {
         logger.LogDebug("Adding build.json to server builds");
 
@@ -220,63 +204,7 @@ public sealed partial class ForkPublishController(
         }
     }
 
-    private void AddVersionToDatabase(
-        Artifact clientArtifact,
-        Dictionary<Artifact, string> diskFiles,
-        string fork,
-        VersionMetadata metadata)
-    {
-        logger.LogDebug("Adding new version to database");
 
-        var dbCon = manifestDatabase.Connection;
-
-        var forkId = dbCon.QuerySingle<int>("SELECT Id FROM Fork WHERE Name = @Name", new { Name = fork });
-
-        var (clientName, clientSha256, _) = GetFileNameSha256Pair(diskFiles[clientArtifact]);
-
-        var versionId = dbCon.QuerySingle<int>("""
-            INSERT INTO ForkVersion (Name, ForkId, PublishedTime, ClientFileName, ClientSha256, EngineVersion)
-            VALUES (@Name, @ForkId, @PublishTime, @ClientName, @ClientSha256, @EngineVersion)
-            RETURNING Id
-            """,
-            new
-            {
-                Name = metadata.Version,
-                ForkId = forkId,
-                ClientName = clientName,
-                ClientSha256 = clientSha256,
-                metadata.EngineVersion,
-                PublishTime = DateTime.UtcNow
-            });
-
-        foreach (var (artifact, diskPath) in diskFiles)
-        {
-            if (artifact.Type != ArtifactType.Server)
-                continue;
-
-            var (serverName, serverSha256, fileSize) = GetFileNameSha256Pair(diskPath);
-
-            dbCon.Execute("""
-                INSERT INTO ForkVersionServerBuild (ForkVersionId, Platform, FileName, Sha256, FileSize)
-                VALUES (@ForkVersion, @Platform, @ServerName, @ServerSha256, @FileSize)
-                """,
-                new
-                {
-                    ForkVersion = versionId,
-                    artifact.Platform,
-                    ServerName = serverName,
-                    ServerSha256 = serverSha256,
-                    FileSize = fileSize
-                });
-        }
-    }
-
-    private static (string name, byte[] hash, long size) GetFileNameSha256Pair(string diskPath)
-    {
-        using var file = System.IO.File.OpenRead(diskPath);
-
-        return (Path.GetFileName(diskPath), SHA256.HashData(file), file.Length);
-    }
 
     private async Task QueueIngestJobAsync(string fork)
     {
@@ -355,64 +283,7 @@ public sealed partial class ForkPublishController(
         public required string Archive { get; set; }
     }
 
-    /// <summary>
-    /// Build version metadata.
-    /// </summary>
-    private sealed class VersionMetadata
-    {
-        public VersionMetadata(string version, string engineVersion, SourceVersionInfo buildVersionInfo, SourceVersionInfo engineSourceVersionInfo)
-        {
-            Version = version;
-            EngineVersion = engineVersion;
-            BuildVersionInfo = buildVersionInfo;
-            EngineSourceVersionInfo = engineSourceVersionInfo;
-        }
 
-        public VersionMetadata(
-            string version,
-            string engineVersion,
-            string? sourceUrl,
-            string? sourceCommitId,
-            string? sourceBranchName,
-            string? engineSourceUrl,
-            string? engineSourceCommitId,
-            string? engineSourceBranchName
-        )
-        {
-            Version = version;
-            EngineVersion = engineVersion;
-            BuildVersionInfo = new SourceVersionInfo(sourceUrl, sourceCommitId, sourceBranchName);
-            EngineSourceVersionInfo = new SourceVersionInfo(engineSourceUrl, engineSourceCommitId, engineSourceBranchName);
-        }
-
-        /// <summary>
-        /// Human-readable version of the build. This is used to identify the build in the CDN and in the game client.
-        /// </summary>
-        public string Version { get; }
-
-        /// <summary>
-        /// Human-readable version of the engine used to build this version.
-        /// </summary>
-        public string EngineVersion { get; }
-
-        /// <summary>
-        /// Version info for sources, used for build.
-        /// </summary>
-        public SourceVersionInfo BuildVersionInfo { get; }
-
-        /// <summary>
-        /// Version info for sources of engine, used for build.
-        /// </summary>
-        public SourceVersionInfo EngineSourceVersionInfo { get; }
-    }
-
-    /// <summary>
-    /// Detailed info on sources used for building version.
-    /// </summary>
-    /// <param name="SourceUrl">URL for repository that holds sources.</param>
-    /// <param name="CommitId">Commit ID used for building sources.</param>
-    /// <param name="BranchName">Branch name or tag, used for building sources.</param>
-    public record SourceVersionInfo(string? SourceUrl, string? CommitId, string? BranchName);
 
     // File cannot start with a dot but otherwise most shit is fair game.
     [GeneratedRegex(@"[a-zA-Z0-9\-_][a-zA-Z0-9\-_.]*")]
@@ -421,15 +292,4 @@ public sealed partial class ForkPublishController(
     [GeneratedRegex(@"[a-zA-Z0-9\-_][a-zA-Z0-9\-_.]*")]
     private static partial Regex ValidFileRegexBuilder();
 
-    private sealed class Artifact
-    {
-        public ArtifactType Type { get; set; }
-        public string? Platform { get; set; }
-    }
-
-    private enum ArtifactType
-    {
-        Server,
-        Client
-    }
 }
