@@ -13,9 +13,11 @@ namespace Robust.Cdn.Tests.Controllers;
 public sealed class StatusControllerTests(WebApplicationFactory<Program> factory, DatabaseFixture database)
     : TestBase(factory, database)
 {
+    protected override string ForkName => "testfork";
+
     protected override Dictionary<string, string?> GetConfigurationOverrides()
     {
-        var baseDir = Database.CreateTestVersionOnDisk("testfork", "1.0.0");
+        var baseDir = Database.CreateTestVersionOnDisk(ForkName, "1.0.0");
         return new()
         {
             ["Manifest:FileDiskPath"] = baseDir,
@@ -40,21 +42,16 @@ public sealed class StatusControllerTests(WebApplicationFactory<Program> factory
     {
         var client = Factory.CreateClient();
 
-        // The ingest job runs asynchronously at startup. Poll until we see some version info uploaded.
-        const int maxAttempts = 20;
-        for (var i = 0; i < maxAttempts; i++)
+        // The ingest job runs asynchronously at startup. Poll until we see version info.
+        await PollUntilCondition(() => client.GetAsync("/control/status"), async response =>
         {
-            var response = await client.GetAsync("/control/status");
-            var content = await response.Content.ReadAsStringAsync();
-            var deserialized = JsonSerializer.Deserialize<Dictionary<string, Object>>(content);
-            if (deserialized != null
-                && int.TryParse(deserialized["contentVersions"].ToString(), out var versionsCount)
-                && versionsCount > 0)
-                return;
-
-            await Task.Delay(200);
-        }
-
-        Assert.Fail("Version was not ingested after startup");
+            var body = await response.Content.ReadAsStringAsync();
+            var deserialized = JsonSerializer.Deserialize<Dictionary<string, object>>(body);
+            return deserialized != null
+                && deserialized.TryGetValue("contentVersions", out var raw)
+                && int.TryParse(raw?.ToString(), out var count)
+                && count > 0;
+        });
     }
 }
+
