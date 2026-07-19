@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Robust.Cdn.Config;
 using SharpZstd;
 
 namespace Robust.Cdn.Tests.Controllers;
@@ -20,11 +21,13 @@ public sealed class ForkDownloadControllerTests(WebApplicationFactory<Program> f
 {
     protected override string ForkName => "testfork2";
 
+    const string FileContent = "test content";
+
     protected override Dictionary<string, string?> GetConfigurationOverrides()
     {
         return new()
         {
-            ["Manifest:FileDiskPath"] = Database.CreateTestVersionOnDisk(ForkName, "1.0.0"),
+            ["Manifest:FileDiskPath"] = Database.CreateTestVersionOnDisk(ForkName, "1.0.0", content: FileContent),
         };
     }
 
@@ -147,17 +150,14 @@ public sealed class ForkDownloadControllerTests(WebApplicationFactory<Program> f
         var responseBody = await response.Content.ReadAsByteArrayAsync();
         Assert.True(responseBody.Length >= 4, "Response must contain at least the stream header");
 
-        // Remaining: per-file headers + data
-        Assert.True(responseBody.Length > 4, "Response must contain file data after stream header");
-
         // Next 4 bytes: file header (uncompressed size)
-        Assert.True(responseBody.Length >= 8, "Response must contain file header");
+        var expectedSize = System.Text.Encoding.UTF8.GetByteCount(FileContent);
         var fileSize = BinaryPrimitives.ReadInt32LittleEndian(responseBody.AsSpan(4, 4));
-        Assert.True(fileSize > 0, "File size must be positive");
+        Assert.Equal(expectedSize, fileSize);
 
         // Rest of body: file data
-        var fileData = await response.Content.ReadAsStringAsync();
-        Assert.Contains("test content", fileData);
+        var fileData = System.Text.Encoding.UTF8.GetString(responseBody, 8, fileSize);
+        Assert.Equal(FileContent, fileData);
     }
 
     [Fact]
@@ -188,23 +188,124 @@ public sealed class ForkDownloadControllerTests(WebApplicationFactory<Program> f
         Assert.Equal("zstd", response.Content.Headers.GetValues("Content-Encoding").Single());
 
         // Decompress the entire response body
-        await using var compressedStream = await response.Content.ReadAsStreamAsync();
-        await using var decompressStream = new ZstdDecodeStream(compressedStream, leaveOpen: false);
-        using var memStream = new MemoryStream();
-        await decompressStream.CopyToAsync(memStream);
-        var decompressedBody = memStream.ToArray();
+        var decompressedBody = await DecompressBody(response);
 
-        // Parse the decompressed download stream format
         Assert.True(decompressedBody.Length >= 8, "Decompressed stream must contain header + file header");
 
         // Next 4 bytes: file header (uncompressed size)
+        var expectedSize = System.Text.Encoding.UTF8.GetByteCount(FileContent);
         var fileSize = BinaryPrimitives.ReadInt32LittleEndian(decompressedBody.AsSpan(4, 4));
-        Assert.True(fileSize > 0, "File size must be positive");
+        Assert.Equal(expectedSize, fileSize);
 
         // Rest: file data
         var fileData = decompressedBody[8..];
         var fileContent = System.Text.Encoding.UTF8.GetString(fileData);
-        Assert.Equal("test content", fileContent);
+        Assert.Equal(FileContent, fileContent);
+    }
+
+    [Fact]
+    public async Task DownloadPost_WithAutoRatioOptingForPreCompression_ReturnsPreCompressedStream()
+    {
+        var body = new byte[4];
+        BinaryPrimitives.WriteInt32LittleEndian(body, 0);
+
+        // Use default AutoStreamCompressRatio (0.5) and request 1 file out of 1 distinct blob.
+        // The ratio 1.0 > 0.5 would go to stream compression branch, so we set ratio high (e.g. 2.0)
+        // so 1.0 <= 2.0 triggers the else branch: pre-compression.
+        var factory = Factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"Cdn:{nameof(CdnOptions.AutoStreamCompressRatio)}"] = "2.0",
+                });
+            });
+        });
+
+        var client = factory.CreateClient();
+        var response = await PollUntilOk(() =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/fork/{ForkName}/version/1.0.0/download")
+            {
+                Content = new ByteArrayContent(body)
+                {
+                    Headers = { ContentType = new MediaTypeHeaderValue("application/octet-stream") }
+                }
+            };
+            request.Headers.Add("X-Robust-Download-Protocol", "1");
+            return client.SendAsync(request);
+        });
+
+        // No stream-level compression since else branch sets optStreamCompression = false.
+        // Pre-compression is active, so response body is raw with 8-byte per-file headers.
+        var responseBody = await response.Content.ReadAsByteArrayAsync();
+
+        // Stream header (4 bytes)
+        Assert.True(responseBody.Length >= 4, "Response must contain stream header");
+        var streamHeaderFlags = BinaryPrimitives.ReadInt32LittleEndian(responseBody.AsSpan(0, 4));
+        // StreamHeaderFlags.PreCompressed = 1, so flags should be non-zero
+        Assert.Equal(1, streamHeaderFlags);
+
+        // File header: 8 bytes (4 size + 4 compression info) since pre-compressed
+        Assert.True(responseBody.Length >= 12, "Response must contain full file header");
+        var expectedSize = System.Text.Encoding.UTF8.GetByteCount(FileContent);
+        var fileSize = BinaryPrimitives.ReadInt32LittleEndian(responseBody.AsSpan(4, 4));
+        Assert.Equal(expectedSize, fileSize);
+        var compInfo = BinaryPrimitives.ReadInt32LittleEndian(responseBody.AsSpan(8, 4));
+        Assert.Equal(0, compInfo); // No compression for this test data
+
+        // File data
+        var fileContent = System.Text.Encoding.UTF8.GetString(responseBody[12..]);
+        Assert.Equal(FileContent, fileContent);
+    }
+
+    [Fact]
+    public async Task DownloadPost_WithAutoStreamCompressRatioDisabled_StreamCompressFallback()
+    {
+        var factory = Factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"Cdn:{nameof(CdnOptions.AutoStreamCompressRatio)}"] = "-1",
+                    [$"Cdn:{nameof(CdnOptions.StreamCompress)}"] = "true",
+                    [$"Cdn:{nameof(CdnOptions.SendPreCompressed)}"] = "false",
+                });
+            });
+        });
+
+        var client = factory.CreateClient();
+        var body = new byte[4];
+        BinaryPrimitives.WriteInt32LittleEndian(body, 0);
+
+        var response = await PollUntilOk(() =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/fork/{ForkName}/version/1.0.0/download")
+            {
+                Content = new ByteArrayContent(body)
+                {
+                    Headers = { ContentType = new MediaTypeHeaderValue("application/octet-stream") }
+                }
+            };
+            request.Headers.Add("X-Robust-Download-Protocol", "1");
+            request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("zstd"));
+            return client.SendAsync(request);
+        });
+
+        Assert.Equal("zstd", response.Content.Headers.GetValues("Content-Encoding").Single());
+
+        var decompressedBody = await DecompressBody(response);
+
+        Assert.True(decompressedBody.Length >= 8, "Decompressed stream must contain header + file header");
+        var expectedSize = System.Text.Encoding.UTF8.GetByteCount(FileContent);
+        var fileSize = BinaryPrimitives.ReadInt32LittleEndian(decompressedBody.AsSpan(4, 4));
+        Assert.Equal(expectedSize, fileSize);
+
+        var fileData = decompressedBody[8..];
+        var fileContent = System.Text.Encoding.UTF8.GetString(fileData);
+        Assert.Equal(FileContent, fileContent);
     }
 }
 

@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
+using SharpZstd;
 
 namespace Robust.Cdn.Tests;
 
@@ -86,6 +87,19 @@ public abstract class TestBase : IClassFixture<DatabaseFixture>
     protected static Task<HttpResponseMessage> PollUntilOk(Func<Task<HttpResponseMessage>> factory, int maxAttempts = 20, int delayMs = 200)
     {
         return PollUntilCondition(factory, response => Task.FromResult(response.StatusCode == HttpStatusCode.OK), maxAttempts, delayMs);
+    }
+
+    /// <summary>
+    /// Decompresses response content using zstd.
+    /// Returns stream as bytes array.
+    /// </summary>
+    protected static async Task<byte[]> DecompressBody(HttpResponseMessage response)
+    {
+        await using var compressedStream = await response.Content.ReadAsStreamAsync();
+        await using var decompressStream = new ZstdDecodeStream(compressedStream, leaveOpen: false);
+        using var memStream = new MemoryStream();
+        await decompressStream.CopyToAsync(memStream);
+        return memStream.ToArray();
     }
 }
 
