@@ -15,8 +15,9 @@ namespace Robust.Cdn.Tests.Controllers;
 [Trait("Category", "IntegrationTest")]
 public sealed class ForkPublishControllerMultiPublishTests(
     WebApplicationFactory<Program> factory,
-    DatabaseFixture database, ITestOutputHelper testOutput)
-    : TestBase(factory, database , testOutput)
+    DatabaseFixture database, 
+    ITestOutputHelper testOutput
+) : TestBase(factory, database , testOutput)
 {
     private const string MultiForkSuccesses= "testfork-multi-successes";
     private const string MultiFork = "testfork-multi-failures";
@@ -144,9 +145,60 @@ public sealed class ForkPublishControllerMultiPublishTests(
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    #endregion
+    [Fact]
+    public async Task MultiPublishStart_VersionAlreadyInProgress_AbortsAndRestarts()
+    {
+        var client = Factory.CreateClient();
 
-    #region File — Validation
+        const string version = "200.0.0";
+
+        var start1Req = new HttpRequestMessage(HttpMethod.Post, $"/fork/{MultiFork}/publish/start")
+        {
+            Content = JsonContent.Create(new { Version = version, EngineVersion = "0.1.2" })
+        };
+        start1Req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+
+        var start1Resp = await client.SendAsync(start1Req);
+        Assert.Equal(HttpStatusCode.NoContent, start1Resp.StatusCode);
+
+        await UploadMultiPublishFile(client, version, "SS14.Server_linux-x64.zip", MultiFork, CreateServerZip("first attempt"));
+
+        var start2Req = new HttpRequestMessage(HttpMethod.Post, $"/fork/{MultiFork}/publish/start")
+        {
+            Content = JsonContent.Create(new { Version = version, EngineVersion = "0.1.3" })
+        };
+        start2Req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+
+        var start2Resp = await client.SendAsync(start2Req);
+        Assert.Equal(HttpStatusCode.NoContent, start2Resp.StatusCode);
+
+        const string expected = "restarted";
+        var clientZipData = CreateClientZip(expected);
+        await UploadMultiPublishFile(client, version, "test.zip", MultiFork, clientZipData);
+        await UploadMultiPublishFile(client, version, "SS14.Server_linux-x64.zip", MultiFork, CreateServerZip(expected));
+
+        var finishRequest = new HttpRequestMessage(HttpMethod.Post, $"/fork/{MultiFork}/publish/finish")
+        {
+            Content = JsonContent.Create(new { Version = version })
+        };
+        finishRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+
+        var finishResponse = await client.SendAsync(finishRequest);
+        Assert.Equal(HttpStatusCode.NoContent, finishResponse.StatusCode);
+
+        await PollUntilCondition(
+            () => client.GetAsync($"/fork/{MultiFork}/manifest"),
+            async r => r.StatusCode == HttpStatusCode.OK && (await r.Content.ReadAsStringAsync()).Contains(version),
+            maxAttempts: 30
+        );
+
+        var getResponse = await client.GetAsync($"/fork/{MultiFork}/version/{version}/file/test.zip");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var actualContent = await ReadFileContent(getResponse);
+        Assert.Equal(expected, actualContent);
+
+    }
 
     [Fact]
     public async Task MultiPublishFile_NoVersionHeader_ReturnsBadRequest()
@@ -168,7 +220,7 @@ public sealed class ForkPublishControllerMultiPublishTests(
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-        [Fact]
+    [Fact]
     public async Task MultiPublishFile_InvalidFileName_ReturnsBadRequest()
     {
         var client = Factory.CreateClient();
@@ -258,7 +310,7 @@ public sealed class ForkPublishControllerMultiPublishTests(
         Assert.Equal("hello from multi-publish", actualContent);
     }
 
-        [Fact]
+    [Fact]
     public async Task MultiPublishFinish_NoClientZip_ReturnsUnprocessableEntity()
     {
         var client = Factory.CreateClient();
@@ -303,7 +355,7 @@ public sealed class ForkPublishControllerMultiPublishTests(
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-        [Fact]
+    [Fact]
     public async Task MultiPublishFile_DuplicateFile_ReturnsConflict()
     {
         var client = Factory.CreateClient();
@@ -341,13 +393,13 @@ public sealed class ForkPublishControllerMultiPublishTests(
 
     #region Helpers
 
-        private async Task UploadMultiPublishFile(HttpClient client, string version, string fileName, string forkName, byte[] fileContent)
+    private async Task UploadMultiPublishFile(HttpClient client, string version, string fileName, string forkName, byte[] fileContent)
     {
         var content = new ByteArrayContent(fileContent);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/fork/{forkName}/publish/file")
-        { 
+        {
             Content = content
         };
         request.Headers.Add("Robust-Cdn-Publish-File", fileName);
@@ -380,6 +432,17 @@ public sealed class ForkPublishControllerMultiPublishTests(
             writer.Write($"fake server binary for {platform}");
         }
         return memStream.ToArray();
+    }
+
+    private static async Task<string> ReadFileContent(HttpResponseMessage getResponse)
+    {
+        var data = await getResponse.Content.ReadAsByteArrayAsync();
+        using var zipStream = new MemoryStream(data);
+        using var zip = new ZipArchive(zipStream, ZipArchiveMode.Read);
+        var entry = zip.GetEntry("data.txt");
+        Assert.NotNull(entry);
+        using var reader = new StreamReader(entry.Open());
+        return await reader.ReadToEndAsync();
     }
 
     #endregion

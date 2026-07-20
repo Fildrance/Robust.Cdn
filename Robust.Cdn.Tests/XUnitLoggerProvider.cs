@@ -27,9 +27,13 @@ public sealed class XUnitLoggerProvider(ITestOutputHelper testOutput) : ILoggerP
                 return;
 
             var message = formatter(state, exception);
-            testOutput.WriteLine($"[{logLevel}] [{categoryName}] {message}");
-            if (exception != null)
-                testOutput.WriteLine($"  Exception: {exception}");
+            try
+            {
+                testOutput.WriteLine($"[{logLevel}] [{categoryName}] {message}");
+                if (exception != null)
+                    testOutput.WriteLine($"  Exception: {exception}");
+            }
+            catch { /* ignore */ }
         }
     }
 }
