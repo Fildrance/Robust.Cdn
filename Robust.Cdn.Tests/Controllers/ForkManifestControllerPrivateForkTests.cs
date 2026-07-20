@@ -135,7 +135,7 @@ public sealed class ForkManifestControllerPrivateForkTests(
 
     #endregion
 
-        #region Helpers
+    #region Helpers
 
     private async Task SetupPublishedBuild(HttpClient client, string? version = null)
     {
