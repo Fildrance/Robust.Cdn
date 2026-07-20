@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests.Controllers;
 
@@ -10,8 +11,11 @@ namespace Robust.Cdn.Tests.Controllers;
 /// Endpoint: GET /control/status
 /// </summary>
 [Trait("Category", "Integration")]
-public sealed class StatusControllerTests(WebApplicationFactory<Program> factory, DatabaseFixture database)
-    : TestBase(factory, database)
+public sealed class StatusControllerTests(
+    WebApplicationFactory<Program> factory, 
+    DatabaseFixture database, 
+    ITestOutputHelper testOutput
+) : TestBase(factory, database, testOutput)
 {
     protected override string ForkName => "testfork";
 

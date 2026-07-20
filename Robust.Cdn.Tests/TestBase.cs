@@ -1,8 +1,9 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+using SharpZstd;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
-using Microsoft.AspNetCore.Mvc.Testing;
-using SharpZstd;
+using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests;
 
@@ -13,10 +14,7 @@ namespace Robust.Cdn.Tests;
 [Collection("ControllerTests")]
 public abstract class TestBase : IClassFixture<DatabaseFixture>
 {
-    /// <summary>
-    /// Fixed timestamp for archive entries to produce deterministic content.
-    /// </summary>
-    private static readonly DateTimeOffset FixedLastWriteTime = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    protected static readonly DateTimeOffset FixedLastWriteTime = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     protected WebApplicationFactory<Program> Factory { get; }
     protected DatabaseFixture Database { get; }
@@ -24,7 +22,7 @@ public abstract class TestBase : IClassFixture<DatabaseFixture>
 
     protected abstract string ForkName { get; }
 
-    protected TestBase(WebApplicationFactory<Program> factory, DatabaseFixture database)
+    protected TestBase(WebApplicationFactory<Program> factory, DatabaseFixture database, ITestOutputHelper testOutput)
     {
         Database = database;
 
@@ -41,6 +39,11 @@ public abstract class TestBase : IClassFixture<DatabaseFixture>
             builder.ConfigureAppConfiguration((_, configBuilder) =>
             {
                 configBuilder.AddInMemoryCollection(config);
+            });
+
+            builder.ConfigureLogging(logging =>
+            {
+                logging.AddProvider(new XUnitLoggerProvider(testOutput));
             });
         });
     }

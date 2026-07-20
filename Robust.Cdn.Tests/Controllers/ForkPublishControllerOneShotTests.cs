@@ -1,7 +1,8 @@
+using Microsoft.AspNetCore.Mvc.Testing;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests.Controllers;
 
@@ -13,8 +14,9 @@ namespace Robust.Cdn.Tests.Controllers;
 [Trait("Category", "IntegrationTest")]
 public sealed class ForkPublishControllerOneShotTests(
     WebApplicationFactory<Program> factory,
-    DatabaseFixture database)
-    : TestBase(factory, database)
+    DatabaseFixture database, 
+    ITestOutputHelper testOutput
+) : TestBase(factory, database, testOutput)
 {
     private const string PublishFork = "testfork-publish";
     private const string Token = "s3cret";

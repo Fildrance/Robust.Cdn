@@ -1,6 +1,7 @@
+using Microsoft.AspNetCore.Mvc.Testing;
 using System.Net;
 using System.Net.Http.Headers;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests.Controllers;
 
@@ -14,8 +15,9 @@ namespace Robust.Cdn.Tests.Controllers;
 /// </summary>
 public sealed class DownloadCompatibilityControllerTests(
     WebApplicationFactory<Program> factory,
-    DatabaseFixture database)
-    : DownloadControllerTestBase(factory, database)
+    DatabaseFixture database, 
+    ITestOutputHelper testOutput
+) : DownloadControllerTestBase(factory, database, testOutput)
 {
     private const string CompatFork = "testfork-compat";
 

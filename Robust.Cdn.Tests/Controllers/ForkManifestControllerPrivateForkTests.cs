@@ -1,15 +1,17 @@
+using Microsoft.AspNetCore.Mvc.Testing;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests.Controllers;
 
 [Trait("Category", "IntegrationTest")]
 public sealed class ForkManifestControllerPrivateForkTests(
     WebApplicationFactory<Program> factory,
-    DatabaseFixture database)
-    : TestBase(factory, database)
+    DatabaseFixture database, 
+    ITestOutputHelper testOutput
+) : TestBase(factory, database, testOutput)
 {
     private const string PrivateForkName = "testfork-private";
     private const string Token = "s3cret";

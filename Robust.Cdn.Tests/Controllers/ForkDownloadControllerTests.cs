@@ -1,5 +1,6 @@
-using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
+using System.Net;
+using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests.Controllers;
 
@@ -11,8 +12,11 @@ namespace Robust.Cdn.Tests.Controllers;
 ///   OPTIONS /fork/{fork}/version/{version}/download
 ///   POST    /fork/{fork}/version/{version}/download
 /// </summary>
-public sealed class ForkDownloadControllerTests(WebApplicationFactory<Program> factory, DatabaseFixture database)
-    : DownloadControllerTestBase(factory, database)
+public sealed class ForkDownloadControllerTests(
+    WebApplicationFactory<Program> factory, 
+    DatabaseFixture database, 
+    ITestOutputHelper testOutput
+) : DownloadControllerTestBase(factory, database, testOutput)
 {
     protected override string ForkName => "testfork2";
 

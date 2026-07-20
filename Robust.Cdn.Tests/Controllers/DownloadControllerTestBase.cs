@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Robust.Cdn.Config;
 using SharpZstd;
+using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests.Controllers;
 
@@ -12,8 +13,11 @@ namespace Robust.Cdn.Tests.Controllers;
 /// and <c>DownloadCompatibilityController</c> (via /version/{version}/...).
 /// </summary>
 [Trait("Category", "IntegrationTest")]
-public abstract class DownloadControllerTestBase(WebApplicationFactory<Program> factory, DatabaseFixture database)
-    : TestBase(factory, database)
+public abstract class DownloadControllerTestBase(
+    WebApplicationFactory<Program> factory, 
+    DatabaseFixture database, 
+    ITestOutputHelper testOutput
+) : TestBase(factory, database, testOutput)
 {
     protected const string FileContent = "test content";
     protected const string ExistingVersion = "1.0.0";

@@ -1,7 +1,8 @@
+using Microsoft.AspNetCore.Mvc.Testing;
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Http.Headers;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests.Controllers;
 
@@ -11,8 +12,11 @@ namespace Robust.Cdn.Tests.Controllers;
 /// Endpoint: POST /fork/{fork}/version/{version}/download
 /// </summary>
 [Trait("Category", "IntegrationTest")]
-public sealed class ForkDownloadControllerMultiFileTests(WebApplicationFactory<Program> factory, DatabaseFixture database)
-    : TestBase(factory, database)
+public sealed class ForkDownloadControllerMultiFileTests(
+    WebApplicationFactory<Program> factory, 
+    DatabaseFixture database, 
+    ITestOutputHelper testOutput
+) : TestBase(factory, database, testOutput)
 {
     private const string MultiFileFork = "testfork-multi";
     private const string MultiFileVersion = "1.0.0";
