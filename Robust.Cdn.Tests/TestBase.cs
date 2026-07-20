@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -12,6 +13,11 @@ namespace Robust.Cdn.Tests;
 [Collection("ControllerTests")]
 public abstract class TestBase : IClassFixture<DatabaseFixture>
 {
+    /// <summary>
+    /// Fixed timestamp for archive entries to produce deterministic content.
+    /// </summary>
+    private static readonly DateTimeOffset FixedLastWriteTime = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
     protected WebApplicationFactory<Program> Factory { get; }
     protected DatabaseFixture Database { get; }
     protected string ManifestDbPath { get; }
@@ -131,6 +137,51 @@ public abstract class TestBase : IClassFixture<DatabaseFixture>
 
         var publishResponse = await client.SendAsync(request);
         publishResponse.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Creates a ZIP archive on disk containing a client zip, server zips, and an extra file.
+    /// Used to simulate a CI build artifact for publish tests.
+    /// </summary>
+    protected static void CreatePublishArchive(string archivePath, string clientZipName, string content)
+    {
+        using (var archiveStream = File.Create(archivePath))
+        using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create))
+        {
+            // Client zip (required by publish)
+            var clientEntry = archive.CreateEntry($"{clientZipName}.zip");
+            clientEntry.LastWriteTime = FixedLastWriteTime;
+            using (var clientEntryStream = clientEntry.Open())
+            using (var clientZip = new ZipArchive(clientEntryStream, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                var fileEntry = clientZip.CreateEntry("data.txt");
+                fileEntry.LastWriteTime = FixedLastWriteTime;
+                using var writer = new StreamWriter(fileEntry.Open());
+                writer.Write(content);
+            }
+
+            // Server zips
+            var serverZipNames = new[] { "SS14.Server_win-x64.zip", "SS14.Server_linux-x64.zip" };
+            foreach (var serverName in serverZipNames)
+            {
+                var serverEntry = archive.CreateEntry(serverName);
+                serverEntry.LastWriteTime = FixedLastWriteTime;
+                using var serverEntryStream = serverEntry.Open();
+                using var serverZip = new ZipArchive(serverEntryStream, ZipArchiveMode.Create, leaveOpen: true);
+                var serverFile = serverZip.CreateEntry("Robust.Server.dll");
+                serverFile.LastWriteTime = FixedLastWriteTime;
+                using var serverWriter = new StreamWriter(serverFile.Open());
+                serverWriter.Write($"fake server binary for {serverName}");
+            }
+
+            // Extra file that should be skipped by ClassifyEntries
+            var extraEntry = archive.CreateEntry("readme.txt");
+            extraEntry.LastWriteTime = FixedLastWriteTime;
+            using (var extraWriter = new StreamWriter(extraEntry.Open()))
+            {
+                extraWriter.Write("this file should be ignored by publish");
+            }
+        }
     }
 
     /// <summary>

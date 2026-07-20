@@ -9,8 +9,6 @@ namespace Robust.Cdn.Tests.Controllers;
 public sealed class ForkManifestControllerTests(WebApplicationFactory<Program> factory, DatabaseFixture database)
     : TestBase(factory, database)
 {
-    private static readonly DateTimeOffset FixedLastWriteTime = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
     protected override string ForkName => "testfork2";
     private const string Token = "s3cret";
     private string? _fileDiskPath;
@@ -167,47 +165,5 @@ public sealed class ForkManifestControllerTests(WebApplicationFactory<Program> f
         var archivePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         CreatePublishArchive(archivePath, clientZipName: "test", content: "hello from publish");
         await PublishOneShotRelease(client, archivePath, Token, version: version, basePort: 18765);
-    }
-
-    private static void CreatePublishArchive(string archivePath, string clientZipName, string content)
-    {
-        using (var archiveStream = File.Create(archivePath))
-        using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create))
-        {
-            // Client zip (required by publish)
-            var clientEntry = archive.CreateEntry($"{clientZipName}.zip");
-            clientEntry.LastWriteTime = FixedLastWriteTime;
-            using (var clientEntryStream = clientEntry.Open())
-            using (var clientZip = new ZipArchive(clientEntryStream, ZipArchiveMode.Create, leaveOpen: true))
-            {
-                var fileEntry = clientZip.CreateEntry("data.txt");
-                fileEntry.LastWriteTime = FixedLastWriteTime;
-                using var writer = new StreamWriter(fileEntry.Open());
-                writer.Write(content);
-            }
-
-            // Server zips (exercises more of the publish flow)
-            var serverZipNames = new[] { "SS14.Server_win-x64.zip", "SS14.Server_linux-x64.zip" };
-            foreach (var serverName in serverZipNames)
-            {
-                var serverEntry = archive.CreateEntry(serverName);
-                serverEntry.LastWriteTime = FixedLastWriteTime;
-                using var serverEntryStream = serverEntry.Open();
-                using var serverZip = new ZipArchive(serverEntryStream, ZipArchiveMode.Create, leaveOpen: true);
-                var serverFile = serverZip.CreateEntry("Robust.Server.dll");
-                serverFile.LastWriteTime = FixedLastWriteTime;
-                using var serverWriter = new StreamWriter(serverFile.Open());
-                serverWriter.Write($"fake server binary for {serverName}");
-            }
-
-            // A regular file that should be skipped by ClassifyEntries (not matching client/server pattern)
-            // but will not break upload process
-            var extraEntry = archive.CreateEntry("readme.txt");
-            extraEntry.LastWriteTime = FixedLastWriteTime;
-            using (var extraWriter = new StreamWriter(extraEntry.Open()))
-            {
-                extraWriter.Write("this file should be ignored by publish");
-            }
-        }
     }
 }
