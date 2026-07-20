@@ -185,10 +185,29 @@ public abstract class TestBase : IClassFixture<DatabaseFixture>
     }
 
     /// <summary>
+    /// Creates a ZIP archive containing only a server zip (no client zip).
+    /// Used to test the "Client zip is missing" error in publish.
+    /// </summary>
+    protected static void CreateServerOnlyArchive(string archivePath)
+    {
+        using var archiveStream = File.Create(archivePath);
+        using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create);
+
+        var serverEntry = archive.CreateEntry("SS14.Server_linux-x64.zip");
+        serverEntry.LastWriteTime = FixedLastWriteTime;
+        using var serverEntryStream = serverEntry.Open();
+        using var serverZip = new ZipArchive(serverEntryStream, ZipArchiveMode.Create, leaveOpen: true);
+        var serverFile = serverZip.CreateEntry("Robust.Server.dll");
+        serverFile.LastWriteTime = FixedLastWriteTime;
+        using var serverWriter = new StreamWriter(serverFile.Open());
+        serverWriter.Write("fake server binary");
+    }
+
+    /// <summary>
     /// Simple listener for providing static file on request.
     /// Is used due to publish process requiring a URL to download new version as archive.
     /// </summary>
-    private class FileProvidingTemporaryHost : IAsyncDisposable
+    protected class FileProvidingTemporaryHost : IAsyncDisposable
     {
         private readonly string _filePath;
         private readonly CancellationTokenSource _cts = new();
