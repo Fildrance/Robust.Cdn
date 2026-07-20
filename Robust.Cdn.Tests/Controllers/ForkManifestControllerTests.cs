@@ -9,7 +9,7 @@ namespace Robust.Cdn.Tests.Controllers;
 public sealed class ForkManifestControllerTests(WebApplicationFactory<Program> factory, DatabaseFixture database)
     : TestBase(factory, database)
 {
-    private static readonly DateTimeOffset _fixedLastWriteTime = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FixedLastWriteTime = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     protected override string ForkName => "testfork2";
     private const string Token = "s3cret";
@@ -176,12 +176,12 @@ public sealed class ForkManifestControllerTests(WebApplicationFactory<Program> f
         {
             // Client zip (required by publish)
             var clientEntry = archive.CreateEntry($"{clientZipName}.zip");
-            clientEntry.LastWriteTime = _fixedLastWriteTime;
+            clientEntry.LastWriteTime = FixedLastWriteTime;
             using (var clientEntryStream = clientEntry.Open())
             using (var clientZip = new ZipArchive(clientEntryStream, ZipArchiveMode.Create, leaveOpen: true))
             {
                 var fileEntry = clientZip.CreateEntry("data.txt");
-                fileEntry.LastWriteTime = _fixedLastWriteTime;
+                fileEntry.LastWriteTime = FixedLastWriteTime;
                 using var writer = new StreamWriter(fileEntry.Open());
                 writer.Write(content);
             }
@@ -191,11 +191,11 @@ public sealed class ForkManifestControllerTests(WebApplicationFactory<Program> f
             foreach (var serverName in serverZipNames)
             {
                 var serverEntry = archive.CreateEntry(serverName);
-                serverEntry.LastWriteTime = _fixedLastWriteTime;
+                serverEntry.LastWriteTime = FixedLastWriteTime;
                 using var serverEntryStream = serverEntry.Open();
                 using var serverZip = new ZipArchive(serverEntryStream, ZipArchiveMode.Create, leaveOpen: true);
                 var serverFile = serverZip.CreateEntry("Robust.Server.dll");
-                serverFile.LastWriteTime = _fixedLastWriteTime;
+                serverFile.LastWriteTime = FixedLastWriteTime;
                 using var serverWriter = new StreamWriter(serverFile.Open());
                 serverWriter.Write($"fake server binary for {serverName}");
             }
@@ -203,7 +203,7 @@ public sealed class ForkManifestControllerTests(WebApplicationFactory<Program> f
             // A regular file that should be skipped by ClassifyEntries (not matching client/server pattern)
             // but will not break upload process
             var extraEntry = archive.CreateEntry("readme.txt");
-            extraEntry.LastWriteTime = _fixedLastWriteTime;
+            extraEntry.LastWriteTime = FixedLastWriteTime;
             using (var extraWriter = new StreamWriter(extraEntry.Open()))
             {
                 extraWriter.Write("this file should be ignored by publish");
