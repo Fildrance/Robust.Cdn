@@ -15,7 +15,7 @@ namespace Robust.Cdn.Tests.Controllers;
 [Trait("Category", "IntegrationTest")]
 public sealed class ForkPublishControllerMultiPublishTests(
     WebApplicationFactory<Program> factory,
-    DatabaseFixture database, 
+    DatabaseFixture database,
     ITestOutputHelper testOutput
 ) : TestBase(factory, database , testOutput)
 {
@@ -218,6 +218,26 @@ public sealed class ForkPublishControllerMultiPublishTests(
         var response = await client.SendAsync(request);
         // Without the version header, the parameter is null; model binding or validation produces BadRequest
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MultiPublishFile_NoInProgressPublish_ReturnsNotFound()
+    {
+        var client = Factory.CreateClient();
+
+        var content = new ByteArrayContent([]);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/fork/{MultiFork}/publish/file")
+        {
+            Content = content
+        };
+        request.Headers.Add("Robust-Cdn-Publish-File", "test.zip");
+        request.Headers.Add("Robust-Cdn-Publish-Version", "999.0.0");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

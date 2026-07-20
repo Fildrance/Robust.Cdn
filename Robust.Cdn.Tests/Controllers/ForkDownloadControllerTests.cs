@@ -1,5 +1,7 @@
+using System.Buffers.Binary;
 using Microsoft.AspNetCore.Mvc.Testing;
 using System.Net;
+using System.Net.Http.Headers;
 using Xunit.Abstractions;
 
 namespace Robust.Cdn.Tests.Controllers;
@@ -13,8 +15,8 @@ namespace Robust.Cdn.Tests.Controllers;
 ///   POST    /fork/{fork}/version/{version}/download
 /// </summary>
 public sealed class ForkDownloadControllerTests(
-    WebApplicationFactory<Program> factory, 
-    DatabaseFixture database, 
+    WebApplicationFactory<Program> factory,
+    DatabaseFixture database,
     ITestOutputHelper testOutput
 ) : DownloadControllerTestBase(factory, database, testOutput)
 {
@@ -39,6 +41,30 @@ public sealed class ForkDownloadControllerTests(
         var client = Factory.CreateClient();
         var response = await client.GetAsync($"/fork/{fork}/version/{version}/manifest");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DownloadPost_EmptyRequestBody_ReturnsStreamHeaderOnly()
+    {
+        var client = Factory.CreateClient();
+        var content = new ByteArrayContent([]);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{RoutePrefix}/{ExistingVersion}/download")
+        {
+            Content = content
+        };
+        request.Headers.Add("X-Robust-Download-Protocol", "1");
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var responseBody = await response.Content.ReadAsByteArrayAsync();
+        // Just the 4-byte stream header, no files
+        Assert.Equal(4, responseBody.Length);
+
+        // Stream header flags = 0 (no PreCompressed)
+        Assert.Equal(0, BinaryPrimitives.ReadInt32LittleEndian(responseBody.AsSpan(0, 4)));
     }
 }
 
