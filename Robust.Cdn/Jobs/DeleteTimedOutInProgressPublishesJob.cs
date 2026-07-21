@@ -46,7 +46,7 @@ public sealed class DeleteInProgressPublishesJob(
             if (utcStartTime >= deleteBefore)
                 continue;
 
-            logger.LogInformation("Deleting timed out publish for fork {Fork} version {Version}, {startTime}, {deleteBefore}", forkName, name, utcStartTime, deleteBefore);
+            logger.LogInformation("Deleting timed out publish for fork {Fork} version {Version}", forkName, name);
 
             publishManager.AbortMultiPublish(forkName, name, tx, commit: false);
 
