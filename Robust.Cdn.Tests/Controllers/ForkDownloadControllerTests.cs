@@ -47,24 +47,26 @@ public sealed class ForkDownloadControllerTests(
     public async Task DownloadPost_EmptyRequestBody_ReturnsStreamHeaderOnly()
     {
         var client = Factory.CreateClient();
-        var content = new ByteArrayContent([]);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"{RoutePrefix}/{ExistingVersion}/download")
+        var response = await PollUntilOk(() =>
         {
-            Content = content
-        };
-        request.Headers.Add("X-Robust-Download-Protocol", "1");
+            var content = new ByteArrayContent([]);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
-        var response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{RoutePrefix}/{ExistingVersion}/download")
+            {
+                Content = content
+            };
+            request.Headers.Add("X-Robust-Download-Protocol", "1");
+            return client.SendAsync(request);
+        });
 
         var responseBody = await response.Content.ReadAsByteArrayAsync();
         // Just the 4-byte stream header, no files
         Assert.Equal(4, responseBody.Length);
 
-        // Stream header flags = 0 (no PreCompressed)
-        Assert.Equal(0, BinaryPrimitives.ReadInt32LittleEndian(responseBody.AsSpan(0, 4)));
+        // Stream header flags = 1 (PreCompressed by default)
+        Assert.Equal(1, BinaryPrimitives.ReadInt32LittleEndian(responseBody.AsSpan(0, 4)));
     }
 }
 
