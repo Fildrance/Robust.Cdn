@@ -45,32 +45,9 @@ public sealed partial class ForkPublishController
             publishManager.AbortMultiPublish(fork, request.Version, tx, commit: false);
         }
 
-        await dbCon.ExecuteAsync(
-            """
-            INSERT INTO PublishInProgress (
-                Version, 
-                ForkId, 
-                StartTime, 
-                EngineVersion,
-                SourceUrl,
-                SourceCommitId,
-                SourceBranchName,
-                EngineSourceUrl,
-                EngineSourceCommitId,
-                EngineSourceBranchName 
-            )
-            VALUES (
-                @Version, 
-                @ForkId, 
-                @StartTime, 
-                @EngineVersion,
-                @SourceUrl,
-                @SourceCommitId,
-                @SourceBranchName,
-                @EngineSourceUrl,
-                @EngineSourceCommitId,
-                @EngineSourceBranchName 
-            )
+        await dbCon.ExecuteAsync("""
+            INSERT INTO PublishInProgress (Version, ForkId, StartTime, EngineVersion, SourceUrl, SourceCommitId, SourceBranchName, EngineSourceUrl, EngineSourceCommitId, EngineSourceBranchName)
+            VALUES (@Version, @ForkId, @StartTime, @EngineVersion, @SourceUrl, @SourceCommitId, @SourceBranchName, @EngineSourceUrl, @EngineSourceCommitId, EngineSourceBranchName)
             """,
             new
             {
